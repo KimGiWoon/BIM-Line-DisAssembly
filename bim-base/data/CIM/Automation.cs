@@ -9,9 +9,15 @@ using static CIMWrite;
 
 namespace bim_base.data.CIM
 {
+
+
     internal class Automation
     {
+
         private bool m_IsRun = false;
+        
+
+        public static Automation Instance = new Automation();
 
         private void SleepWithDoEvent(int _seconds)
         {

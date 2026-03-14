@@ -2053,7 +2053,6 @@ public class CIMWrite
 
     DateTime m_cimDateTime = new DateTime();
 
-    public static CIMWrite Instance = new CIMWrite();
 
     public CIMWrite()
     {
