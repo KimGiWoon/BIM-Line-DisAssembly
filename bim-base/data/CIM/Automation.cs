@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
@@ -16,6 +17,12 @@ namespace bim_base.data.CIM
 
     internal class Automation
     {
+        #region Delegate
+
+        public delegate void ReceivedTerminalDisplayEventHandler(int _messageNum, string _messageText);
+
+        #endregion
+
         #region Constructor
 
         public Automation()
@@ -27,8 +34,6 @@ namespace bim_base.data.CIM
         #region Private Member
 
 
-        private bool m_IsRun = false;
-
         private CIMRead m_Reader = new CIMRead();
         private CIMWrite m_Writer = new CIMWrite();
 
@@ -38,6 +43,9 @@ namespace bim_base.data.CIM
 
 
         public static Automation Instance = new Automation();
+
+        public bool IsInitialized { get; private set; } = false;
+        public bool IsRun { get; private set; } = false;
 
         public CIMRead CCIE_Reader
         {
@@ -50,6 +58,12 @@ namespace bim_base.data.CIM
             get { return this.m_Writer; }
             private set { this.m_Writer = value; }
         }
+
+        #endregion
+
+        #region Event
+
+        public event ReceivedTerminalDisplayEventHandler ReceivedTerminalDisplayEvent;
 
         #endregion
 
@@ -177,6 +191,15 @@ namespace bim_base.data.CIM
         }
 
 
+        private void InitializeSignals()
+        {
+            foreach (string enumName in Enum.GetNames(typeof(CIMWrite.WRITE_B)))
+            {
+                CIMWrite.WRITE_B addrBit = (CIMWrite.WRITE_B)Enum.Parse(typeof(CIMWrite.WRITE_B), enumName);
+                this.CCIE_Writer.setBit(addrBit, false);
+            }
+        }
+
         #endregion
 
         #region Public Method
@@ -213,9 +236,10 @@ namespace bim_base.data.CIM
 
         public bool Initialize()
         {
-            if (this.m_IsRun) return false;
+            if (this.IsInitialized) return false;
 
             int timeoutSeconds = 5;
+            this.InitializeSignals();
 
             // 초기 ALIVE 신호 OFF로 Reset
             Task<bool> asyncHS = Task.Run(() => this.HandShakeSignal(WRITE_B.ALIVEBIT_1, false, CIMRead.READ_B.ALIVEBIT_1, false, timeoutSeconds));
@@ -241,11 +265,11 @@ namespace bim_base.data.CIM
             // Date Time 동기화 처리
             if (this.SetDateTime() == false) return false;
 
-            this.m_IsRun = true;
+            this.IsInitialized = true;
             Task.Run(() =>
              {
                  bool alive = false;
-                 while (this.m_IsRun)
+                 while (this.IsInitialized)
                  {
                      alive = this.CCIE_Reader.readBit(CIMRead.READ_B.ALIVEBIT_1);
 
@@ -260,6 +284,8 @@ namespace bim_base.data.CIM
         {
             // TODO CHECK LHJ : PC의 Local 시간에 Date Time이 변경되는지 여부 확인
 
+            this.CCIE_Writer.setBit(WRITE_B.DATETIMESET_2, false);
+
             CIMRead.WORD_DATA varDateTime = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_7_D000_Datetime);
             if (this.TryParseDateTime(varDateTime.text, out DateTime setDateTime) == false)
                 return false;
@@ -269,7 +295,46 @@ namespace bim_base.data.CIM
                 return false;
             }
 
+            this.CCIE_Writer.setBit(WRITE_B.DATETIMESET_2, true);
+            Task.Run(() => this.SleepWithDoEvent(1)).Wait();
+            this.CCIE_Writer.setBit(WRITE_B.DATETIMESET_2, false);
+
             return true;
+        }
+
+        public void Run()
+        {
+            if (this.IsRun) return;
+
+            this.IsRun = true;
+
+            Task.Run(() => this.TerminalDisplay());
+
+
+            this.IsRun = false;
+        }
+
+        public void TerminalDisplay()
+        {
+            try
+            {
+                if (this.CCIE_Reader.readBit(CIMRead.READ_B.TERMINALDISPLAY_3) == false) 
+                    return;
+
+                CIMRead.WORD_DATA varMessageNum = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_1_D04D_TerminalNumber);
+                CIMRead.WORD_DATA varMessageText = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_60_D011_TerminalDisplayText);
+
+
+                ReceivedTerminalDisplayEvent?.Invoke(varMessageNum.value, varMessageText.text);
+
+                this.CCIE_Writer.setBit(WRITE_B.TERMINALDISPLAY_3, true);
+                Task.Run(() => this.SleepWithDoEvent(1)).Wait();
+                this.CCIE_Writer.setBit(WRITE_B.TERMINALDISPLAY_3, false);
+
+            }
+            catch
+            {
+            }
         }
 
         #endregion
