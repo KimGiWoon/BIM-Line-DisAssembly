@@ -97,7 +97,7 @@ namespace bim_base.data.CIM
 
         #region Public Method
 
-        public bool HandShakeSignal(CIMWrite.WRITE_B _addrWrite, bool _writeValue, CIMRead.READ_B _addrRead, bool _readValue, int _timeoutSeconds = 0, bool _isOnError = true)
+        public bool HandShakeSignal(CIMWrite.WRITE_B _addrWrite, bool _writeValue, CIMRead.READ_B _addrRead, bool _readValue, int _timeoutSeconds = 0, bool _isOnError = false)
         {
             bool function()
             {
@@ -131,8 +131,10 @@ namespace bim_base.data.CIM
         //{
         //    this.m_IsRun = true;
 
-        //    Task<bool> reset = this.HandShakeSignal(WRITE_B.ALIVEBIT_1, false, CIMRead.READ_B.ALIVEBIT_1, false, 5, false));
-            
+        //    int timeoutSeconds = 5;
+
+        //    Task<bool> reset = Task.Run(() => this.HandShakeSignal(WRITE_B.ALIVEBIT_1, false, CIMRead.READ_B.ALIVEBIT_1, false, timeoutSeconds, false));
+        //    reset.Wait(timeoutSeconds);
 
 
 
