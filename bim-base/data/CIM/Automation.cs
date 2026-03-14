@@ -19,7 +19,8 @@ namespace bim_base.data.CIM
     {
         #region Delegate
 
-        public delegate void ReceivedTerminalDisplayEventHandler(int _messageNum, string _messageText);
+        public delegate void OnReceivedTerminalDisplayEventHandler(int _MessageNum, string _MessageText);
+        public delegate void OnReceivedOperatorCallEventHandler(int _OpCallNum, string _OpCallText);
 
         #endregion
 
@@ -63,7 +64,8 @@ namespace bim_base.data.CIM
 
         #region Event
 
-        public event ReceivedTerminalDisplayEventHandler ReceivedTerminalDisplayEvent;
+        public event OnReceivedTerminalDisplayEventHandler ReceivedTerminalDisplayEvent;
+        public event OnReceivedOperatorCallEventHandler ReceivedOperatorCallEvent;
 
         #endregion
 
@@ -202,6 +204,61 @@ namespace bim_base.data.CIM
 
         #endregion
 
+        #region Private Method : CIM 대응
+
+        private void TerminalDisplay()
+        {
+            try
+            {
+                if (this.CCIE_Reader.readBit(CIMRead.READ_B.TERMINALDISPLAY_3) == false)
+                    return;
+
+                CIMRead.WORD_DATA varMessageNum = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_1_D04D_TerminalNumber);
+                CIMRead.WORD_DATA varMessageText = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_60_D011_TerminalDisplayText);
+
+                if (int.TryParse(varMessageNum.text, out int messageNum) == false)
+                    return;
+
+                ReceivedTerminalDisplayEvent?.Invoke(messageNum, varMessageText.text);
+
+                this.CCIE_Writer.setBit(WRITE_B.TERMINALDISPLAY_3, true);
+                Task.Run(() => this.SleepWithDoEvent(1)).Wait();
+                this.CCIE_Writer.setBit(WRITE_B.TERMINALDISPLAY_3, false);
+
+            }
+            catch
+            {
+            }
+        }
+
+        private void OperatorCall()
+        {
+            try
+            {
+                if (this.CCIE_Reader.readBit(CIMRead.READ_B.OPERATORCALL_4) == false)
+                    return;
+
+                CIMRead.WORD_DATA varOpCallNum = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_10_D058_OperatorCallID);
+                CIMRead.WORD_DATA varOpCallText = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_60_D062_OperatorCallText);
+
+                if (int.TryParse(varOpCallNum.text, out int opCallNum) == false)
+                    return;
+
+                ReceivedOperatorCallEvent?.Invoke(opCallNum, varOpCallText.text);
+
+                this.CCIE_Writer.setBit(WRITE_B.OPCALLCONFIRM_41, true);
+                Task.Run(() => this.SleepWithDoEvent(1)).Wait();
+                this.CCIE_Writer.setBit(WRITE_B.OPCALLCONFIRM_41, false);
+
+            }
+            catch
+            {
+            }
+        }
+
+
+        #endregion
+
         #region Public Method
 
         public bool HandShakeSignal(CIMWrite.WRITE_B _addrWrite, bool _writeValue, CIMRead.READ_B _addrRead, bool _readValue, int _timeoutSeconds = 0, bool _isOnError = false)
@@ -309,33 +366,12 @@ namespace bim_base.data.CIM
             this.IsRun = true;
 
             Task.Run(() => this.TerminalDisplay());
+            Task.Run(() => this.OperatorCall());
 
 
             this.IsRun = false;
         }
 
-        public void TerminalDisplay()
-        {
-            try
-            {
-                if (this.CCIE_Reader.readBit(CIMRead.READ_B.TERMINALDISPLAY_3) == false) 
-                    return;
-
-                CIMRead.WORD_DATA varMessageNum = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_1_D04D_TerminalNumber);
-                CIMRead.WORD_DATA varMessageText = this.CCIE_Reader.wordData(CIMRead.READ_W.ASCII_60_D011_TerminalDisplayText);
-
-
-                ReceivedTerminalDisplayEvent?.Invoke(varMessageNum.value, varMessageText.text);
-
-                this.CCIE_Writer.setBit(WRITE_B.TERMINALDISPLAY_3, true);
-                Task.Run(() => this.SleepWithDoEvent(1)).Wait();
-                this.CCIE_Writer.setBit(WRITE_B.TERMINALDISPLAY_3, false);
-
-            }
-            catch
-            {
-            }
-        }
 
         #endregion
 
