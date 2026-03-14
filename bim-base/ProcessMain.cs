@@ -18,6 +18,7 @@ namespace bim_base
         AjinDIO m_dioOut = null;
         AjinAIO m_aioIn = null;
 
+
         CSerialFRENIC m_frenic = null;
         MelsecCCLink m_ccLink = null;
 
